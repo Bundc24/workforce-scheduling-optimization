@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Front Desk Scheduler: how the math works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script>window.MathJax={tex:{tags:"none"}};</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js"></script>
+<style>
+:root{color-scheme:light dark;--bg:#f4f6fa;--card:#fff;--ink:#14202e;--mute:#566577;--line:#d5dce6;--p:#168a4f;--pbg:#d6f0e1;--cls:#c93232;--cbg:#f9dada;--acc:#1d4ed8;--abg:#e1e9fd;--code:#edf1f7;--amb:#9a6700;--ambg:#fcf0d0}
+@media (prefers-color-scheme:dark){:root{--bg:#0f151c;--card:#171f29;--ink:#e6edf4;--mute:#9bacbd;--line:#2a3745;--p:#4cc783;--pbg:#183a2a;--cls:#ef7a7a;--cbg:#432326;--acc:#7da2ff;--abg:#1c2a52;--code:#1e2935;--amb:#e6b45a;--ambg:#3a2f18}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:780px;margin:0 auto;padding:44px 20px 90px}
+h1{font-size:2.1rem;line-height:1.2;margin:0 0 .5rem;font-weight:600;letter-spacing:-.01em}
+h2{font-size:1.45rem;margin:3rem 0 .6rem;font-weight:600;border-top:2px solid var(--acc);padding-top:.75rem;letter-spacing:-.005em}
+h3{font-size:1.1rem;margin:1.8rem 0 .4rem;font-weight:600;color:var(--acc)}
+h4{margin:0 0 .3rem;font-size:1rem;font-weight:600}
+p{margin:.6rem 0}
+.lead{font-size:1.1rem;color:var(--mute)}
+nav{margin:1.2rem 0;display:flex;flex-wrap:wrap;gap:.3rem 1rem;font-weight:500;font-size:.95rem}
+@media (min-width:1260px){nav{position:fixed;left:28px;top:44px;flex-direction:column;width:170px;gap:.45rem;border-left:2px solid var(--line);padding-left:.9rem}}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+code,.f{font-family:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-size:.85em}
+code{background:var(--code);padding:.1em .35em;border-radius:3px}
+.f{display:block;background:var(--code);padding:.6rem .8rem;border-radius:3px;margin:.5rem 0;overflow-x:auto;white-space:pre}
+table{border-collapse:collapse;width:100%;margin:.8rem 0;font-size:.93rem}
+th,td{border:1px solid var(--line);padding:.45rem .6rem;text-align:left;vertical-align:top}
+th{background:var(--abg);color:var(--acc);font-weight:600}
+.wrap{overflow-x:auto}
+.c{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:3px;padding:.8rem 1rem;margin:.9rem 0}
+.c.soft{border-left-color:var(--amb)}.c.hard{border-left-color:var(--cls)}
+.intuition{background:var(--ambg);border-left:3px solid var(--amb);border-radius:0 3px 3px 0;padding:.5rem .8rem;margin:.6rem 0;font-size:.95rem}
+.intuition::before{content:"Intuition. ";font-weight:600;color:var(--amb)}
+.tag{display:inline-block;font-size:.74rem;font-weight:600;padding:.05rem .5rem;border-radius:3px;margin-left:.5rem;vertical-align:middle}
+.t-h{background:var(--cbg);color:var(--cls)}.t-s{background:var(--ambg);color:var(--amb)}
+.form{background:var(--card);border:1px solid var(--acc);border-top:4px solid var(--acc);border-radius:3px;padding:.7rem 1rem 1rem;margin:1.2rem 0;overflow-x:auto}
+.form h4{color:var(--acc);margin-bottom:.2rem}
+.note{font-size:.88rem;color:var(--mute);margin:.4rem 0 0}
+mjx-container[display]{overflow-x:auto;overflow-y:hidden;margin:.6em 0!important}
+.grid{display:grid;grid-template-columns:3.2rem repeat(5,1fr);gap:3px;max-width:440px;margin:1.2rem 0;font-size:.78rem;font-weight:600;text-align:center}
+.grid b{padding:.15rem 0;color:var(--mute)}
+.grid i{font-style:normal;border-radius:3px;padding:.25rem 0;color:#10161d}
+.s1{background:#8db8ff}.s2{background:#8fdcae}.s3{background:#ffc778}.s4{background:#f19a9a}.s5{background:#c8a8ee}
+.day{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;margin:.2rem 0}
+.day span{height:18px;border-radius:2px;background:var(--code)}
+.day .w{background:var(--acc)}
+.day.ok{outline:2px solid var(--p);outline-offset:3px}.day.no{outline:2px solid var(--cls);outline-offset:3px}
+.lab{font-size:.9rem;margin:.9rem 0 .3rem}
+.leg i{display:inline-block;width:.9rem;height:.9rem;border-radius:2px;vertical-align:-2px;margin-right:.3rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Front Desk Scheduler</h1>
+<p class="lead">A tool that uses math to build a fair weekly schedule for a learning center front desk, and to help decide which new people to hire.</p>
+
+<div class="grid" aria-label="Example week schedule">
+<b></b><b>Mon</b><b>Tue</b><b>Wed</b><b>Thu</b><b>Fri</b>
+<b>9a</b><i class="s1">Leo</i><i class="s2">Eva</i><i class="s3">Dan</i><i class="s2">Eva</i><i class="s4">Pri</i>
+<b>11a</b><i class="s1">Leo</i><i class="s2">Eva</i><i class="s5">Sam</i><i class="s3">Dan</i><i class="s4">Pri</i>
+<b>1p</b><i class="s5">Sam</i><i class="s3">Dan</i><i class="s5">Sam</i><i class="s3">Dan</i><i class="s1">Leo</i>
+<b>3p</b><i class="s5">Sam</i><i class="s1">Leo</i><i class="s2">Eva</i><i class="s4">Pri</i><b>closed</b>
+</div>
+
+<nav><a href="#story">The story</a><a href="#ideas">Three ideas</a><a href="#p1">Part 1: Schedule</a><a href="#p2">Part 2: Hiring</a><a href="#checks">Safety checks</a><a href="#run">Run it</a><a href="#gloss">Glossary</a></nav>
+
+<h2 id="story">1. The story</h2>
+<p>A learning center has a <b>front desk</b>. It is open Monday to Thursday 9am to 5pm, and Friday 9am to 3pm. <b>Exactly one student worker sits at the desk at a time.</b> We chop the week into half-hour blocks, so there are <b>76 blocks</b> (38 hours) to fill.</p>
+<p>Each worker fills out a sheet before the semester:</p>
+<div class="wrap"><table>
+<tr><th>They write</th><th>Meaning</th></tr>
+<tr><td><b>Ideal hours</b></td><td>How many hours a week they would like to work.</td></tr>
+<tr><td><b>Max hours</b></td><td>A limit. They must never be scheduled above it.</td></tr>
+<tr><td class="leg"><i style="background:var(--pbg);border:1px solid var(--p)"></i><b>P</b></td><td>Preferred. They can work this block <i>and</i> they would like to.</td></tr>
+<tr><td class="leg"><i style="background:var(--code);border:1px solid var(--line)"></i><b>A</b> or blank</td><td>Available. They can work it, but it is not their favorite.</td></tr>
+<tr><td class="leg"><i style="background:var(--cbg);border:1px solid var(--cls)"></i><b>Class</b> (red)</td><td>Busy. They cannot work this block.</td></tr>
+</table></div>
+<p>A manager used to solve this by hand. With 8 or more workers and 76 blocks, the number of possible schedules is astronomically large, so this project asks a computer to search them all smartly. The method is called <b>mixed-integer linear optimization</b> (MILP), solved with the Gurobi solver.</p>
+
+<p><b>Two jobs:</b></p>
+<p><b>Part 1, Scheduling:</b> given a list of workers, build the best weekly schedule.<br>
+<b>Part 2, Hiring:</b> if some blocks cannot be covered by returning workers, or we might want more people, work out which applicants to hire.</p>
+
+<h2 id="ideas">2. Three ideas you need first</h2>
+<h3>Decisions, goal, rules</h3>
+<p>Every optimization model has three parts. Think of planning a class party:</p>
+<table>
+<tr><th>Part</th><th>Class party example</th><th>This project</th></tr>
+<tr><td><b>Decision variables</b>: the quantities the model calculates</td><td>Who sits at which table?</td><td>Who sits at the desk in each half-hour?</td></tr>
+<tr><td><b>Objective</b>: the score to make as good as possible</td><td>Make the most friends sit together</td><td>Give people their ideal hours and preferred times, with no gaps</td></tr>
+<tr><td><b>Constraints</b>: rules that can never be broken</td><td>Each table seats only 4</td><td>One person at the desk, never when busy, never above max</td></tr>
+</table>
+
+<h3>Binary variables are yes/no switches</h3>
+<p>A <b>binary variable</b> can only be <code>1</code> (yes) or <code>0</code> (no). Most of our choices are like this: “Does Leo work Monday 9:00? yes or no.”</p>
+
+<h3>Rules that must hold vs. wishes we try for</h3>
+<div class="wrap"><table>
+<tr><th>Never broken (constraints)</th><th>Done as well as possible (objective)</th></tr>
+<tr><td>Never schedule someone when busy<br>Never above max hours<br>One person at the desk at a time<br>Shifts last 2 to 5 hours<br>One shift per person per day<br>Everyone gets at least one shift</td><td>Cover every block<br>Give each person close to their ideal hours<br>Share any shortfall fairly<br>Use preferred (P) blocks</td></tr>
+</table></div>
+
+<h2 id="p1">3. Part 1: Building the schedule</h2>
+<h3>3.1 The facts we feed in (the data)</h3>
+<div class="wrap"><table>
+<tr><th>Symbol</th><th>Meaning</th></tr>
+<tr><td><code>s</code></td><td>A person. “Sam” is one <code>s</code>.</td></tr>
+<tr><td><code>t</code></td><td>One half-hour block of the week (76 of them). <code>day(t)</code> is its weekday.</td></tr>
+<tr><td><code>a[s,t]</code></td><td>1 if person s <b>can</b> work block t (P, A or blank), otherwise 0.</td></tr>
+<tr><td><code>p[s,t]</code></td><td>1 if person s marked block t as <b>Preferred</b>.</td></tr>
+<tr><td><code>I_s</code> and <code>M_s</code></td><td>Ideal and max weekly hours of person s.</td></tr>
+<tr><td><code>δ = 0.5</code></td><td>Hours in one block.</td></tr>
+<tr><td><code>L_min = 4</code>, <code>L_max = 10</code></td><td>Shortest and longest shift, in blocks (2 hours and 5 hours).</td></tr>
+<tr><td><code>H_s</code></td><td>Smallest allowed weekly hours: 2 for a returning person; for a hired applicant, 4 (or their max if it is lower).</td></tr>
+</table></div>
+
+<h3>3.2 Decision variables (the quantities the model solves for)</h3>
+<div class="wrap"><table>
+<tr><th>Variable</th><th>Type</th><th>In words</th></tr>
+<tr><td><code>x[s,t]</code></td><td>yes/no</td><td>Person s works block t. This is the schedule itself.</td></tr>
+<tr><td><code>y[s,t]</code></td><td>yes/no</td><td>A shift <b>starts</b> for person s at block t. A helper that lets us count shifts.</td></tr>
+<tr><td><code>g[t]</code></td><td>yes/no</td><td>Block t is a <b>gap</b>: nobody is at the desk.</td></tr>
+<tr><td><code>u[s]</code></td><td>number ≥ 0</td><td>Hours person s is <b>under</b> their ideal.</td></tr>
+<tr><td><code>o[s]</code></td><td>number ≥ 0</td><td>Hours person s is <b>over</b> their ideal (but within max).</td></tr>
+<tr><td><code>w</code></td><td>number ≥ 0</td><td>The <b>worst</b> shortfall (as a fraction of ideal) of anyone.</td></tr>
+</table></div>
+<p>Weekly hours are not a variable. They are a formula: <code>h_s = 0.5 × (number of blocks person s works)</code>.</p>
+<div class="intuition">If someone is busy in a block, the model has no variable for it, so that assignment cannot happen. “Never when busy” is built into the variables instead of being a separate rule.</div>
+
+<h3>3.3 The objective (the score; smaller is better)</h3>
+<code class="f">minimize   1000 · (gaps)
+         +  150 · w
+         +   15 · (total shortfall, as fractions of ideal)
+         +    2 · (total overage, as fractions of ideal)
+         −    1 · (number of preferred blocks given)</code>
+<div class="wrap"><table>
+<tr><th>Term</th><th>Why it is there</th></tr>
+<tr><td>Gaps × 1000</td><td>Biggest price. Leaving the desk empty is the worst outcome, so a gap only appears when nobody legally can cover it.</td></tr>
+<tr><td><code>w</code> × 150</td><td>Pushes up the person who is worst off, so the shortfall is spread evenly, not dumped on one person.</td></tr>
+<tr><td>Shortfall × 15</td><td>Fewer total missed hours is better. Measured as a fraction (6 wanted, 4 given = 33% short; 20 wanted, 18 given = 10% short).</td></tr>
+<tr><td>Overage × 2</td><td>Between ideal and max is fine, so this price is tiny. It only stops extra hours piling on one person for no reason.</td></tr>
+<tr><td>Preferred × −1</td><td>Each P block given lowers the score (a reward). It is the tie-breaker among otherwise equal schedules.</td></tr>
+</table></div>
+<div class="intuition">The model adds up a penalty score for every candidate schedule and looks for the lowest one. Big penalties (gaps) matter most; small ones (preferences) break ties.</div>
+
+<h3>3.4 Constraints (the rules)</h3>
+
+<div class="c hard"><h4>1. Coverage <span class="tag t-h">hard rule</span></h4>
+<code class="f">for every block t:   Σ_s x[s,t]  +  g[t]  =  1</code>
+<p>Exactly one person works the block, or it is marked a gap.</p>
+<div class="intuition">One chair at the desk. Either one person sits there, or we write “nobody can”. The gap switch stops the whole puzzle from breaking just because a block has nobody free.</div></div>
+
+<div class="c hard"><h4>2. Never above max <span class="tag t-h">hard rule</span></h4>
+<code class="f">for every person s:   h_s  ≤  M_s</code>
+<div class="intuition">Nobody works more hours than they said they could.</div></div>
+
+<div class="c hard"><h4>3. Everyone works a little <span class="tag t-h">hard rule</span></h4>
+<code class="f">for every person s:   h_s  ≥  H_s</code>
+<p>A returning person gets at least 2 hours. Together with the shift rules, that means at least one real shift.</p>
+<div class="intuition">Nobody on the team gets left out with zero hours.</div></div>
+
+<div class="c hard"><h4>4. Spot where a shift starts <span class="tag t-h">hard rule</span></h4>
+<code class="f">y[s,t]  ≥  x[s,t] − x[s,t−1]
+y[s,t]  ≤  x[s,t]
+y[s,t]  ≤  1 − x[s,t−1]</code>
+<p>(For the first block of a day, treat “the block before” as 0.) Together these force <code>y = 1</code> exactly when person s works block t <b>but did not work the block before</b>.</p>
+<div class="intuition">A start is “the light just switched on”. Working now and not working a moment ago means a new shift began. This helper lets rules 5 and 6 count shifts.</div></div>
+
+<div class="c hard"><h4>5. No tiny shifts: at least 2 hours <span class="tag t-h">hard rule</span></h4>
+<code class="f">y[s,t]  ≤  x[s,t+1],   y[s,t]  ≤  x[s,t+2],   y[s,t]  ≤  x[s,t+3]</code>
+<p>If a shift starts at block t, the next three blocks must be worked too, so the shift is at least 4 blocks (2 hours). If fewer than 4 blocks remain in the day (late afternoon, or after Friday’s 3pm close), a shift cannot start there at all.</p>
+<div class="intuition">Nobody gets asked to come in for just 30 minutes.</div></div>
+
+<div class="c hard"><h4>6. One shift per day <span class="tag t-h">hard rule</span></h4>
+<code class="f">for every person s and day d:   Σ_(t on day d) y[s,t]  ≤  1</code>
+<p>The number of starts equals the number of separate blocks of work, so at most one block per day: <b>no split shifts</b>. It says “at most”, so working zero shifts that day is allowed. Nobody has to work every day.</p>
+<div class="intuition">If Sam comes in Tuesday, it is one stretch, not 9 to 12 and then back again at 3.</div></div>
+
+<div class="c hard"><h4>7. Not too long: at most 5 hours <span class="tag t-h">hard rule</span></h4>
+<code class="f">for every person s and day d:   Σ_(t on day d) x[s,t]  ≤  10</code>
+<p>With one block per day, this caps that block at 10 half-hours.</p></div>
+
+<div class="c soft"><h4>8. Measuring distance from ideal <span class="tag t-s">bookkeeping</span></h4>
+<code class="f">for every person s:   h_s − I_s  =  o[s] − u[s]</code>
+<p>This splits “hours minus ideal” into an <b>over</b> part and an <b>under</b> part. Both are penalized in the objective, so only one of them can be above zero at the best answer. (If both were positive, lowering both would keep the equation true and lower the penalty.)</p>
+<div class="intuition">If you wanted 10 hours and got 8, then u = 2 and o = 0. If you got 12, then u = 0 and o = 2.</div></div>
+
+<div class="c soft"><h4>9. Fairness link <span class="tag t-s">bookkeeping</span></h4>
+<code class="f">for every person s:   u[s] / max(I_s, 1)  ≤  w</code>
+<p>The variable <code>w</code> must be at least as large as <i>everyone’s</i> shortfall fraction. The objective then tries to make <code>w</code> small, which means lifting the worst-off person. This is the <b>min-max trick</b> from linear optimization.</p>
+<div class="intuition">It is like raising the lowest test score in a class instead of padding the highest one.</div></div>
+
+<h3>3.5 Final formulation (Part 1)</h3>
+<div class="form"><h4>Scheduling model for a given team \(S\)</h4>
+\[
+\begin{aligned}
+\min_{x,\,y,\,g,\,u,\,o,\,w}\quad
+& W_{\text{gap}}\sum_{t\in T} g_t \;+\; W_{\text{fair}}\,w \;+\; W_{\text{sum}}\sum_{s\in S}\frac{u_s}{I'_s} \;+\; W_{\text{over}}\sum_{s\in S}\frac{o_s}{I'_s} \;-\; W_{\text{pref}}\sum_{s\in S}\sum_{t\in T} p_{st}\,x_{st}\\[4pt]
+\text{subject to}\quad
+& \sum_{s\in S} x_{st} + g_t = 1 && \forall\, t\in T && \text{(C1)}\\
+& \delta\sum_{t\in T} x_{st} \le M_s && \forall\, s\in S && \text{(C2)}\\
+& \delta\sum_{t\in T} x_{st} \ge H_s && \forall\, s\in S && \text{(C3)}\\
+& y_{st} \ge x_{st}-x_{s,t-1},\;\; y_{st}\le x_{st},\;\; y_{st}\le 1-x_{s,t-1} && \forall\, s\in S,\ t\in T && \text{(C4)}\\
+& y_{st} \le x_{s,t+j},\quad j=1,2,3 && \forall\, s\in S,\ t\in T && \text{(C5)}\\
+& \sum_{t\in T_d} y_{st} \le 1 && \forall\, s\in S,\ d\in D && \text{(C6)}\\
+& \sum_{t\in T_d} x_{st} \le L_{\max} && \forall\, s\in S,\ d\in D && \text{(C7)}\\
+& \delta\sum_{t\in T} x_{st} - I_s = o_s - u_s && \forall\, s\in S && \text{(C8)}\\
+& \frac{u_s}{I'_s} \le w && \forall\, s\in S && \text{(C9)}\\
+& x_{st},\,y_{st},\,g_t \in\{0,1\};\quad u_s,\,o_s,\,w \ge 0
+\end{aligned}
+\]
+<p class="note">Conventions: \(x_{s,t-1}=0\) for the first block of each day. If fewer than 3 blocks remain in the day after block \(t\), (C5) is replaced by \(y_{st}=0\). \(x_{st}\) and \(y_{st}\) exist only where \(a_{st}=1\) and are treated as 0 elsewhere. \(I'_s=\max(I_s,1)\), \(L_{\max}=10\), \(\delta=0.5\).</p></div>
+<h3>3.6 What a legal shift looks like</h3>
+<p class="lab">One day, 16 half-hour blocks (9:00 to 5:00). Blue = working.</p>
+<div class="day ok"><span></span><span></span><span class="w"></span><span class="w"></span><span class="w"></span><span class="w"></span><span class="w"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+<p class="lab">Good: one block, 2.5 hours.</p>
+<div class="day no"><span class="w"></span><span class="w"></span><span class="w"></span><span class="w"></span><span></span><span></span><span></span><span></span><span class="w"></span><span class="w"></span><span class="w"></span><span class="w"></span><span></span><span></span><span></span><span></span></div>
+<p class="lab">Not allowed: split shift (rule 6).</p>
+<div class="day no"><span></span><span></span><span></span><span class="w"></span><span class="w"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+<p class="lab">Not allowed: only 1 hour (rule 5).</p>
+
+<h2 id="p2">4. Part 2: Deciding who to hire</h2>
+<h3>4.1 The problem</h3>
+<p>Sometimes a block cannot be covered by anyone on the returning team. Then we need to hire, and we need someone who can fill that gap. Sometimes there are no gaps, but we still might want more people. There is a catch: <b>the desk only has 38 hours</b>. Every new hire takes hours from someone already on the team. So the question is not “who can fill the gap?”, it is “how many people, and which ones, so that everyone ends up close to their ideal hours?”</p>
+<p>New applicants fill out the same sheet (ideal, max, P / A / Class) in a second Excel file.</p>
+
+<h3>4.2 The approach: try every possible team</h3>
+<p>Let <code>R</code> be the returning staff and <code>A′</code> the applicants who could be hired. For each possible group of hires <code>H</code> (no one, just Elena, Elena + Ravi, and so on, up to 3 hires) the tool:</p>
+<p>1. Builds a team <code>R ∪ H</code> and runs the <b>whole Part 1 model</b> on it.<br>
+2. Writes down a scorecard for the resulting schedule.<br>
+3. Ranks all the scorecards and shows the full schedule of the winner.</p>
+<p>Every applicant is treated with the <b>exact same rules, weights and fairness</b> as a returning person. A hired applicant gets at least 4 hours (a flat floor so nobody is hired for a 2-hour job), never more than their max, and is pushed toward their ideal just like everyone else.</p>
+<div class="intuition">Imagine picking a soccer team. We try every possible lineup, play a practice game with each, check how happy every player is, and pick the lineup that leaves everyone happiest.</div>
+
+<h3>4.3 The scorecard (one row per team)</h3>
+<div class="wrap"><table>
+<tr><th>Column</th><th>What it tells the manager</th></tr>
+<tr><td>Gap slots</td><td>How many blocks nobody covers.</td></tr>
+<tr><td>Worst shortfall %</td><td>How far below ideal the worst-off person (returner or new hire) ends up.</td></tr>
+<tr><td>Returner shortfall (hrs)</td><td>Total hours returners are below their ideal.</td></tr>
+<tr><td>New-hire shortfall (hrs)</td><td>Same, for the hired applicants.</td></tr>
+<tr><td>Total shortfall (hrs)</td><td>Those two added up.</td></tr>
+<tr><td>Returner hrs vs no-hire</td><td>Hours returners gained or lost compared to hiring nobody. A negative number means the hire took hours from them.</td></tr>
+<tr><td>Preferred % of desk hrs</td><td>How much of the week is staffed during blocks people marked P.</td></tr>
+<tr><td>Flags</td><td>A warning if a returner who lost hours is now under 75% of ideal, or a new hire is under 75% of ideal.</td></tr>
+</table></div>
+
+<h3>4.4 How teams are ranked</h3>
+<code class="f">sort by:  (1) fewest gaps
+          (2) smallest worst-off shortfall (rounded to whole %)
+          (3) smallest total shortfall
+          (4) fewest hires</code>
+<p>Rule 4 is how “hire 1, not 2” happens. A second hire only wins if it makes the shortfall smaller. The tool shows the full schedule for rank 1 automatically, and <code>show(k)</code> shows any other row. The manager can read the table and overrule the ranking.</p>
+
+<h3>4.5 Final formulation (what the code runs)</h3>
+<div class="form"><h4>Enumerate teams, solve Part 1 for each, then rank</h4>
+<p>For every hiring set \(H\subseteq A'\) with \(|H|\le K\):</p>
+\[
+\mathcal{P}(H):\quad \text{solve the Part 1 model with } S = R\cup H,\quad H_s=\begin{cases}2 & s\in R\\ \min(4,\,M_s) & s\in H\end{cases}
+\]
+<p>which returns hours \(h_s(H)\) and gaps \(G(H)=\sum_t g_t\). Then choose</p>
+\[
+H^{*}\in\operatorname*{lexmin}_{H\subseteq A',\ |H|\le K}\Big(\,G(H),\ \operatorname{round}\!\big(100\,w(H)\big),\ \sigma(H),\ |H|\,\Big)
+\]
+\[
+w(H)=\max_{s\in R\cup H}\frac{\max\{0,\,I_s-h_s(H)\}}{I'_s},\qquad
+\sigma(H)=\sum_{s\in R\cup H}\max\{0,\,I_s-h_s(H)\}
+\]
+<p class="note">“lexmin” compares the four numbers in order: gaps first, then the worst-off shortfall, then total shortfall, then number of hires. A set whose model is infeasible is dropped.</p></div>
+<h3>4.6 Hiring as a single MILP (for the math-minded)</h3>
+<p>You can write hiring as one MILP by adding a yes/no switch \(z_a\) for each applicant \(a\in A\) (\(z_a=1\) means hired), tying an applicant’s work to that switch with big-M style links, and adding a price per hire \(W_{\text{hire}}\) (between the gap price and the fairness price).</p>
+<div class="form"><h4>Single-model formulation, team \(S=R\cup A\)</h4>
+\[
+\begin{aligned}
+\min_{x,y,g,u,o,w,z}\quad
+& W_{\text{gap}}\sum_{t} g_t + W_{\text{hire}}\sum_{a\in A} z_a + W_{\text{fair}}\,w + W_{\text{sum}}\sum_{s\in S}\frac{u_s}{I'_s} + W_{\text{over}}\sum_{s\in S}\frac{o_s}{I'_s} - W_{\text{pref}}\sum_{s\in S}\sum_{t} p_{st}x_{st}\\[4pt]
+\text{subject to}\quad
+& \text{(C1), (C4)--(C7), (C9)} && \text{as in Part 1, for all } s\in S\\
+& \delta\sum_{t} x_{st}\le M_s,\quad \delta\sum_{t} x_{st}\ge H_s,\quad \delta\sum_{t} x_{st}-I_s=o_s-u_s && \forall\, s\in R\\
+& x_{at}\le z_a && \forall\, a\in A,\ t\in T\\
+& \delta\sum_{t} x_{at}\le M_a\,z_a && \forall\, a\in A\\
+& \delta\sum_{t} x_{at}\ge H_a\,z_a && \forall\, a\in A\\
+& \delta\sum_{t} x_{at}-I_a\,z_a=o_a-u_a && \forall\, a\in A\\
+& \sum_{a\in A} z_a\le K\\
+& x,\,y,\,g,\,z\in\{0,1\};\quad u,\,o,\,w\ge 0
+\end{aligned}
+\]
+<p class="note">The \(M_a z_a\) rows are the big-M switch: if \(z_a=0\) the applicant has 0 hours; if \(z_a=1\) they may work up to \(M_a\). The \(I_a z_a\) term means ideal hours only count for hired applicants.</p></div>
+
+<div class="intuition">Big-M is a light switch. <code>M_a · hire[a]</code> is “you may work up to M hours if the switch is on, and zero if it is off.”</div>
+<p><b>Why the code enumerates instead:</b> the single formula needs a made-up “price per hire”, and the answer would change with that number. Trying every team and showing the table makes the trade-off visible, and the manager decides. Each team’s schedule is still solved exactly as a MILP.</p>
+
+<h2 id="checks">5. Safety checks before solving</h2>
+<p>Before any math runs, the tool reads every Excel sheet and prints a report. <b>If it finds a real problem, it stops</b> and lists everything to fix, then you re-run.</p>
+<div class="wrap"><table>
+<tr><th>Stops the run (fix these)</th><th>Just a heads-up</th></tr>
+<tr><td>A cell it cannot read (like “yes” with no red color)<br>Missing or non-numeric ideal or max<br>Ideal above max, or a negative number<br>Duplicate names, missing file<br>A returner with no free stretch of 2+ hours</td><td>A returner whose free time cannot reach their ideal<br>An applicant who cannot be hired (left out of the comparison)<br>Marked P but filled red<br>Returner max hours add up to less than the 38 desk hours</td></tr>
+</table></div>
+<p>If the solver still reports “infeasible”, the tool names the people and rules that conflict, in plain sentences.</p>
+
+<h2 id="run">6. Running it</h2>
+<div class="wrap"><table>
+<tr><th>File</th><th>What it is</th></tr>
+<tr><td><code>FD_availability_template.xlsx</code></td><td>Returning staff. One sheet per person, same layout as above.</td></tr>
+<tr><td><code>FD_applicants_template.xlsx</code></td><td>Applicants. Same layout, separate workbook.</td></tr>
+<tr><td><code>fd_scheduler.py</code></td><td>Reads the sheets, runs the checks, solves Part 1, prints and exports the schedule.</td></tr>
+<tr><td><code>fd_hiring_section.py</code></td><td>Part 2: tries every hiring team, builds the comparison table, shows the best schedule.</td></tr>
+</table></div>
+<p>Needs Python, <code>pandas</code>, <code>openpyxl</code> and <code>gurobipy</code> (Gurobi licence; free for academic use). Run the scheduler first, then the hiring section. The settings you may change sit at the top of each file:</p>
+<div class="wrap"><table>
+<tr><th>Setting</th><th>Default</th><th>Meaning</th></tr>
+<tr><td><code>W_GAP, W_FAIR, W_SUM, W_OVER, W_PREF</code></td><td>1000, 150, 15, 2, 1</td><td>Penalty prices in the objective. Raise <code>W_PREF</code> if preferences look ignored; raise <code>W_FAIR</code> if hours look lopsided.</td></tr>
+<tr><td><code>MIN_SHIFT, MAX_SHIFT</code></td><td>4, 10 blocks</td><td>2 hours to 5 hours.</td></tr>
+<tr><td><code>MIN_WEEK_HRS, MIN_HIRE_HRS</code></td><td>2, 4 hrs</td><td>Smallest weekly hours for a returner and for a hired applicant.</td></tr>
+<tr><td><code>MAX_HIRES</code></td><td>3</td><td>Largest hiring team to test.</td></tr>
+<tr><td><code>GUARD_PCT</code></td><td>0.75</td><td>The “under 75% of ideal” warning line.</td></tr>
+</table></div>
+<p><b>Limits to know:</b> the weights are tuned by judgment, not proven; many schedules can tie, so a small change in a sheet can reshuffle other people’s shifts; and the tool covers one semester at a time.</p>
+
+<h2 id="gloss">7. Glossary</h2>
+<div class="wrap"><table>
+<tr><td><b>Optimization</b></td><td>Finding the best choice among many, according to a score, while obeying rules.</td></tr>
+<tr><td><b>MILP</b></td><td>Mixed-integer linear program. Some variables are whole-number or yes/no, and every rule and the score are straight-line (linear) formulas.</td></tr>
+<tr><td><b>Decision variable</b></td><td>A quantity the model solves for.</td></tr>
+<tr><td><b>Binary variable</b></td><td>A variable that is only 0 or 1.</td></tr>
+<tr><td><b>Constraint</b></td><td>A rule that every acceptable answer must follow.</td></tr>
+<tr><td><b>Objective</b></td><td>The score the model tries to make as low (or high) as possible.</td></tr>
+<tr><td><b>Feasible / infeasible</b></td><td>Feasible: some answer follows every rule. Infeasible: the rules contradict each other.</td></tr>
+<tr><td><b>Gap</b></td><td>A half-hour block nobody can cover.</td></tr>
+<tr><td><b>Shortfall</b></td><td>How many hours someone is below their ideal.</td></tr>
+<tr><td><b>Min-max trick</b></td><td>Add a variable that must be at least as big as everyone’s value, then minimize it, which improves the worst case.</td></tr>
+<tr><td><b>Big-M</b></td><td>A large constant that switches a rule on or off using a yes/no variable.</td></tr>
+<tr><td><b>Gurobi</b></td><td>The software that solves the optimization problem.</td></tr>
+</table></div>
+</main>
+</body>
+</html>
